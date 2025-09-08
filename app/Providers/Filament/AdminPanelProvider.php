@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Enums\NavigationGroup as NavigationGroupEnum;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -19,6 +20,9 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Filament\Navigation\NavigationGroup;
+use Filament\Support\Icons\Heroicon;
+
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -58,6 +62,15 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+            ])
+            ->collapsibleNavigationGroups(false)
+            ->navigationGroups([
+                NavigationGroup::make()
+                    ->label(NavigationGroupEnum::USER_MANAGEMENT->getLabel())
+                    ->icon(NavigationGroupEnum::USER_MANAGEMENT->getIcon()),
+                NavigationGroup::make()
+                    ->label(NavigationGroupEnum::PRODUCT_MANAGEMENT->getLabel())
+                    ->icon(NavigationGroupEnum::PRODUCT_MANAGEMENT->getIcon()),
             ]);
     }
 }

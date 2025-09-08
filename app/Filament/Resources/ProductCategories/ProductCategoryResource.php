@@ -9,8 +9,10 @@ use App\Filament\Resources\ProductCategories\Pages\ViewProductCategory;
 use App\Filament\Resources\ProductCategories\Schemas\ProductCategoryForm;
 use App\Filament\Resources\ProductCategories\Tables\ProductCategoriesTable;
 use App\Models\ProductCategory;
+use App\Enums\NavigationGroup as NavigationGroupEnum;
 use BackedEnum;
 use Filament\Resources\Resource;
+use UnitEnum;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
@@ -19,15 +21,15 @@ class ProductCategoryResource extends Resource
 {
     protected static ?string $model = ProductCategory::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
     protected static ?string $navigationLabel = 'Categories';
+
+    protected static UnitEnum|string|null $navigationGroup = NavigationGroupEnum::PRODUCT_MANAGEMENT;
 
     protected static ?string $modelLabel = 'Category';
 
     protected static ?string $pluralModelLabel = 'Categories';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 1;
 
     public static function canAccess(): bool
     {

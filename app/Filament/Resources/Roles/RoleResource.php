@@ -7,9 +7,11 @@ use App\Filament\Resources\Roles\Pages\EditRole;
 use App\Filament\Resources\Roles\Pages\ListRoles;
 use App\Filament\Resources\Roles\Schemas\RoleForm;
 use App\Filament\Resources\Roles\Tables\RolesTable;
+use App\Enums\NavigationGroup as NavigationGroupEnum;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Contracts\HasShieldPermissions;
 use Filament\Resources\Resource;
+use UnitEnum;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
@@ -19,7 +21,15 @@ class RoleResource extends Resource implements HasShieldPermissions
 {
     protected static ?string $model = Role::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static ?string $navigationLabel = 'Roles';
+
+    protected static UnitEnum|string|null $navigationGroup = NavigationGroupEnum::USER_MANAGEMENT;
+
+    protected static ?int $navigationSort = 2;
+
+    protected static ?string $modelLabel = 'Role';
+
+    protected static ?string $pluralModelLabel = 'Roles';
 
     public static function getPermissionPrefixes(): array
     {

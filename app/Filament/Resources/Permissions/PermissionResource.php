@@ -7,9 +7,11 @@ use App\Filament\Resources\Permissions\Pages\EditPermission;
 use App\Filament\Resources\Permissions\Pages\ListPermissions;
 use App\Filament\Resources\Permissions\Schemas\PermissionForm;
 use App\Filament\Resources\Permissions\Tables\PermissionsTable;
+use App\Enums\NavigationGroup as NavigationGroupEnum;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Contracts\HasShieldPermissions;
 use Filament\Resources\Resource;
+use UnitEnum;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
@@ -19,7 +21,9 @@ class PermissionResource extends Resource implements HasShieldPermissions
 {
     protected static ?string $model = Permission::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static UnitEnum|string|null $navigationGroup = NavigationGroupEnum::USER_MANAGEMENT;
+
+    protected static ?int $navigationSort = 3;
 
     public static function getPermissionPrefixes(): array
     {
