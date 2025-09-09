@@ -86,8 +86,10 @@ class RoleSeeder extends Seeder
 
             'manager' => [
                 'view users',
-                'view roles',
-                'view permissions',
+                'view_role',
+                'view_any_role',
+                'view_permission',
+                'view_any_permission',
                 'view products',
                 'create products',
                 'edit products',
