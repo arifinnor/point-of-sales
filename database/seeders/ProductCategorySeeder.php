@@ -27,6 +27,13 @@ class ProductCategorySeeder extends Seeder
                 'is_active' => true,
                 'sort_order' => 2,
             ],
+            [
+                'name' => 'Others',
+                'description' => 'Other products',
+                'slug' => 'others',
+                'is_active' => true,
+                'sort_order' => 3,
+            ],
         ];
 
         foreach ($categories as $category) {
