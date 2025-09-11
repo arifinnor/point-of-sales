@@ -342,6 +342,12 @@
             color: rgb(148, 163, 184);
         }
         
+        .order-item-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
         .order-item-controls {
             display: flex;
             align-items: center;
@@ -349,8 +355,8 @@
         }
         
         .quantity-btn {
-            width: 1.5rem;
-            height: 1.5rem;
+            width: 2rem;
+            height: 2rem;
             border: 1px solid rgba(0, 0, 0, 0.1);
             border-radius: 0.25rem;
             background: white;
@@ -359,7 +365,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.75rem;
+            font-size: 1rem;
         }
         
         .dark .quantity-btn {
@@ -414,6 +420,72 @@
         .sticky-sidebar {
             position: sticky;
             top: 1.5rem;
+        }
+        
+        .order-item-notes-input {
+            margin-top: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .notes-input {
+            width: 100%;
+            padding: 0.375rem 0.5rem;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 0.375rem;
+            background: white;
+            color: rgb(2, 6, 23);
+            font-size: 0.75rem;
+        }
+        
+        .dark .notes-input {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: rgb(255, 255, 255);
+        }
+        
+        .notes-input:focus {
+            outline: none;
+            border-color: rgb(59, 130, 246);
+            box-shadow: 0 0 0 1px rgb(59, 130, 246);
+        }
+        
+        .order-item-notes {
+            margin-top: 0.25rem;
+        }
+        
+        .customer-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .customer-section-header:hover {
+            opacity: 0.8;
+        }
+        
+        .customer-section-toggle {
+            transition: transform 0.2s ease;
+        }
+        
+        .customer-section-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+        
+        .customer-section-content {
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+        }
+        
+        .customer-section-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+        
+        .customer-section-content.expanded {
+            max-height: 1000px;
+            opacity: 1;
         }
     </style>
     
@@ -483,48 +555,19 @@
         <div class="sticky-sidebar">
             {{-- Customer Information Section --}}
             <div class="order-section mb-3">
-                <h2>Customer Information</h2>
-                <p>Enter customer details</p>
-                
-                <div class="mb-3">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        <span>Name</span>
-                        <span class="text-red-500 ml-1">*</span>
-                    </label>
-                    <x-filament::input.wrapper>
-                        <x-filament::input
-                            type="text"
-                            placeholder="Customer name"
-                            wire:model.live="customerName"
-                            required
-                        />
-                    </x-filament::input.wrapper>
+                <div class="customer-section-header" wire:click="toggleCustomerSection">
+                    <div>
+                        <h2>Customer and Order Information</h2>
+                    </div>
+                    <svg class="customer-section-toggle {{ $customerSectionCollapsed ? 'collapsed' : '' }}" 
+                         width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
                 </div>
                 
-                <div class="mb-3">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Email
-                    </label>
-                    <x-filament::input.wrapper>
-                        <x-filament::input
-                            type="email"
-                            placeholder="customer@example.com"
-                            wire:model.live="customerEmail"
-                        />
-                    </x-filament::input.wrapper>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Phone
-                    </label>
-                    <x-filament::input.wrapper>
-                        <x-filament::input
-                            type="tel"
-                            placeholder="Phone number"
-                            wire:model.live="customerPhone"
-                        />
-                    </x-filament::input.wrapper>
+                <div class="customer-section-content {{ $customerSectionCollapsed ? 'collapsed' : 'expanded' }}">
+                    <p>Enter customer details</p>
+                    <div>{{ $this->form }}</div>
                 </div>
             </div>
 
@@ -545,13 +588,22 @@
                                     <div class="order-item-name">{{ $item['name'] }}</div>
                                     <div class="order-item-price">${{ number_format($item['price'], 2) }} each</div>
                                 </div>
-                                <div class="order-item-controls">
-                                    <button class="quantity-btn" wire:click="updateQuantity({{ $item['id'] }}, -1)">-</button>
-                                    <span class="quantity-display">{{ $item['quantity'] }}</span>
-                                    <button class="quantity-btn" wire:click="updateQuantity({{ $item['id'] }}, 1)">+</button>
+                                <div class="order-item-right">
+                                    <div class="order-item-controls">
+                                        <button class="quantity-btn" wire:click="updateQuantity({{ $item['id'] }}, -1)">-</button>
+                                        <span class="quantity-display">{{ $item['quantity'] }}</span>
+                                        <button class="quantity-btn" wire:click="updateQuantity({{ $item['id'] }}, 1)">+</button>
+                                    </div>
+                                    <div class="order-item-total">${{ number_format($item['price'] * $item['quantity'], 2) }}</div>
                                     <button class="remove-btn" wire:click="removeFromOrder({{ $item['id'] }})">Remove</button>
                                 </div>
-                                <div class="order-item-total">${{ number_format($item['price'] * $item['quantity'], 2) }}</div>
+                            </div>
+                            <div class="order-item-notes-input">
+                                <input type="text" 
+                                       placeholder="Add note for {{ $item['name'] }}..." 
+                                       class="notes-input"
+                                       wire:model.live="orderItems.{{ $loop->index }}.notes"
+                                       wire:blur="updateItemNotes({{ $item['id'] }}, $event.target.value)">
                             </div>
                         @endforeach
                     @endif
@@ -572,24 +624,11 @@
                     </div>
                 </div>
 
-                <div class="notes-section">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Order Notes
-                    </label>
-                    <x-filament::input.wrapper>
-                        <x-filament::input
-                            type="textarea"
-                            rows="3"
-                            placeholder="Add any special instructions..."
-                            wire:model.live="notes"
-                        />
-                    </x-filament::input.wrapper>
-                </div>
 
                 <div class="action-buttons">
                     <x-filament::button
                         wire:click="placeOrder"
-                        :disabled="empty($orderItems) || empty($customerName)"
+                        :disabled="empty($orderItems) || empty($this->customerName)"
                         color="primary"
                         size="lg"
                         class="w-full mb-3"

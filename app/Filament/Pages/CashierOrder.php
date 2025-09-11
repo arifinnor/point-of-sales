@@ -7,11 +7,19 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use BackedEnum;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Forms\Form;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Schemas\Schema;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 
-class CashierOrder extends Page
+class CashierOrder extends Page implements HasForms
 {
+    use InteractsWithForms;
+
     protected string $view = 'filament.pages.cashier-order';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shopping-cart';
@@ -42,11 +50,55 @@ class CashierOrder extends Page
 
     public $categories = [];
 
+    public $customerSectionCollapsed = true;
+
     public function mount()
     {
         $this->loadCategories();
         $this->loadProducts();
         $this->updateTotals();
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
+                TextInput::make('customerName')
+                    ->label('Name')
+                    ->placeholder('Customer name')
+                    ->required()
+                    ->live()
+                    ->afterStateUpdated(function ($state) {
+                        $this->customerName = $state;
+                    }),
+                
+                TextInput::make('customerEmail')
+                    ->label('Email')
+                    ->placeholder('customer@example.com')
+                    ->email()
+                    ->live()
+                    ->afterStateUpdated(function ($state) {
+                        $this->customerEmail = $state;
+                    }),
+                
+                TextInput::make('customerPhone')
+                    ->label('Phone')
+                    ->placeholder('Phone number')
+                    ->tel()
+                    ->live()
+                    ->afterStateUpdated(function ($state) {
+                        $this->customerPhone = $state;
+                    }),
+                
+                Textarea::make('notes')
+                    ->label('Order Notes')
+                    ->placeholder('Add any special instructions...')
+                    ->rows(3)
+                    ->live()
+                    ->afterStateUpdated(function ($state) {
+                        $this->notes = $state;
+                    }),
+            ]);
     }
 
     public function loadCategories()
@@ -138,6 +190,7 @@ class CashierOrder extends Page
                 'name' => $product['name'],
                 'price' => $product['price'],
                 'quantity' => 1,
+                'notes' => '',
             ];
         }
 
@@ -167,6 +220,22 @@ class CashierOrder extends Page
         })->filter()->values()->toArray();
 
         $this->updateTotals();
+    }
+
+    public function updateItemNotes($productId, $notes)
+    {
+        $this->orderItems = collect($this->orderItems)->map(function ($item) use ($productId, $notes) {
+            if ($item['id'] === $productId) {
+                $item['notes'] = $notes;
+            }
+
+            return $item;
+        })->toArray();
+    }
+
+    public function toggleCustomerSection()
+    {
+        $this->customerSectionCollapsed = !$this->customerSectionCollapsed;
     }
 
     public function updateTotals()
@@ -239,6 +308,7 @@ class CashierOrder extends Page
                         'unit_price' => $product->price,
                         'quantity' => $item['quantity'],
                         'total_price' => $product->price * $item['quantity'],
+                        'notes' => $item['notes'] ?? '',
                     ]);
 
                     // Update stock if tracking is enabled
@@ -303,6 +373,7 @@ class CashierOrder extends Page
                         'unit_price' => $product->price,
                         'quantity' => $item['quantity'],
                         'total_price' => $product->price * $item['quantity'],
+                        'notes' => $item['notes'] ?? '',
                     ]);
                 }
             });
