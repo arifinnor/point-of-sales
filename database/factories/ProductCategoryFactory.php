@@ -16,8 +16,14 @@ class ProductCategoryFactory extends Factory
      */
     public function definition(): array
     {
+        $name = fake()->words(2, true);
+
         return [
-            //
+            'name' => $name,
+            'description' => fake()->sentence(),
+            'slug' => fake()->unique()->slug(),
+            'is_active' => true,
+            'sort_order' => fake()->numberBetween(0, 100),
         ];
     }
 }
