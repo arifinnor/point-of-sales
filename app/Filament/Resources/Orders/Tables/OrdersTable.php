@@ -20,10 +20,6 @@ class OrdersTable
                     ->searchable(),
                 TextColumn::make('customer_name')
                     ->searchable(),
-                TextColumn::make('customer_email')
-                    ->searchable(),
-                TextColumn::make('customer_phone')
-                    ->searchable(),
                 TextColumn::make('subtotal')
                     ->numeric()
                     ->sortable(),
