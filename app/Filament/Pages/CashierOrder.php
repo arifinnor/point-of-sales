@@ -7,13 +7,13 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use BackedEnum;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Form;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
-use Filament\Schemas\Schema;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
 
 class CashierOrder extends Page implements HasForms
@@ -71,7 +71,7 @@ class CashierOrder extends Page implements HasForms
                     ->afterStateUpdated(function ($state) {
                         $this->customerName = $state;
                     }),
-                
+
                 TextInput::make('customerEmail')
                     ->label('Email')
                     ->placeholder('customer@example.com')
@@ -80,7 +80,7 @@ class CashierOrder extends Page implements HasForms
                     ->afterStateUpdated(function ($state) {
                         $this->customerEmail = $state;
                     }),
-                
+
                 TextInput::make('customerPhone')
                     ->label('Phone')
                     ->placeholder('Phone number')
@@ -89,7 +89,7 @@ class CashierOrder extends Page implements HasForms
                     ->afterStateUpdated(function ($state) {
                         $this->customerPhone = $state;
                     }),
-                
+
                 Textarea::make('notes')
                     ->label('Order Notes')
                     ->placeholder('Add any special instructions...')
@@ -127,6 +127,15 @@ class CashierOrder extends Page implements HasForms
             $query->where('product_category_id', $this->selectedCategory);
         }
 
+        // Filter out products that are out of stock
+        $query->where(function ($q) {
+            $q->where('track_stock', false)
+                ->orWhere(function ($subQuery) {
+                    $subQuery->where('track_stock', true)
+                        ->where('stock_quantity', '>', 0);
+                });
+        });
+
         $this->products = $query->orderBy('name')->get()->toArray();
     }
 
@@ -154,25 +163,16 @@ class CashierOrder extends Page implements HasForms
             return;
         }
 
-        // Check if product is out of stock
-        if ($product['track_stock'] && $product['stock_quantity'] <= 0) {
-            $this->dispatch('notify', [
-                'type' => 'error',
-                'message' => 'Cannot add '.$product['name'].' - out of stock',
-            ]);
-
-            return;
-        }
-
         $existingItem = collect($this->orderItems)->firstWhere('id', $productId);
 
         if ($existingItem) {
-            // Check if adding one more would exceed stock
+            // Check if adding one more would exceed stock (if stock tracking is enabled)
             if ($product['track_stock'] && ($existingItem['quantity'] + 1) > $product['stock_quantity']) {
-                $this->dispatch('notify', [
-                    'type' => 'error',
-                    'message' => 'Cannot add more '.$product['name'].' - insufficient stock',
-                ]);
+                Notification::make()
+                    ->title('Insufficient Stock')
+                    ->body('Cannot add more '.$product['name'].' - insufficient stock')
+                    ->danger()
+                    ->send();
 
                 return;
             }
@@ -188,9 +188,11 @@ class CashierOrder extends Page implements HasForms
             $this->orderItems[] = [
                 'id' => $product['id'],
                 'name' => $product['name'],
+                'sku' => $product['sku'] ?? '',
                 'price' => $product['price'],
                 'quantity' => 1,
                 'notes' => '',
+                'category' => $product['category']['name'] ?? 'Uncategorized',
             ];
         }
 
@@ -235,7 +237,7 @@ class CashierOrder extends Page implements HasForms
 
     public function toggleCustomerSection()
     {
-        $this->customerSectionCollapsed = !$this->customerSectionCollapsed;
+        $this->customerSectionCollapsed = ! $this->customerSectionCollapsed;
     }
 
     public function updateTotals()
@@ -251,20 +253,22 @@ class CashierOrder extends Page implements HasForms
     public function placeOrder()
     {
         if (empty($this->orderItems)) {
-            $this->dispatch('notify', [
-                'type' => 'error',
-                'message' => 'Cannot place order: No items in cart',
-            ]);
+            Notification::make()
+                ->title('Cannot place order')
+                ->body('No items in cart')
+                ->danger()
+                ->send();
 
             return;
         }
 
         // Validate customer information
         if (empty($this->customerName)) {
-            $this->dispatch('notify', [
-                'type' => 'error',
-                'message' => 'Customer name is required',
-            ]);
+            Notification::make()
+                ->title('Validation Error')
+                ->body('Customer name is required')
+                ->danger()
+                ->send();
 
             return;
         }
@@ -272,16 +276,19 @@ class CashierOrder extends Page implements HasForms
         // Validate stock availability
         $stockValidation = $this->validateStockAvailability();
         if (! $stockValidation['valid']) {
-            $this->dispatch('notify', [
-                'type' => 'error',
-                'message' => $stockValidation['message'],
-            ]);
+            Notification::make()
+                ->title('Stock Error')
+                ->body($stockValidation['message'])
+                ->danger()
+                ->send();
 
             return;
         }
 
         try {
-            DB::transaction(function () {
+            $order = null;
+
+            DB::transaction(function () use (&$order) {
                 // Create the order
                 $order = Order::create([
                     'cashier_id' => auth()->id(),
@@ -318,35 +325,41 @@ class CashierOrder extends Page implements HasForms
                 }
             });
 
-            $this->dispatch('notify', [
-                'type' => 'success',
-                'message' => "Order #{$order->order_number} placed successfully! Total: $".number_format($this->grandTotal, 2),
-            ]);
+            // Show success notification
+            Notification::make()
+                ->title('Order Placed Successfully!')
+                ->body("Order #{$order->order_number} has been placed. Total: $".number_format($this->grandTotal, 2))
+                ->success()
+                ->send();
 
             // Reset the order
             $this->resetOrder();
 
         } catch (\Exception $e) {
-            $this->dispatch('notify', [
-                'type' => 'error',
-                'message' => 'Failed to place order. Please try again.',
-            ]);
+            Notification::make()
+                ->title('Order Failed')
+                ->body('Failed to place order. Please try again.')
+                ->danger()
+                ->send();
         }
     }
 
     public function saveDraft()
     {
         if (empty($this->orderItems)) {
-            $this->dispatch('notify', [
-                'type' => 'error',
-                'message' => 'Cannot save draft: No items in cart',
-            ]);
+            Notification::make()
+                ->title('Cannot save draft')
+                ->body('No items in cart')
+                ->danger()
+                ->send();
 
             return;
         }
 
         try {
-            DB::transaction(function () {
+            $order = null;
+
+            DB::transaction(function () use (&$order) {
                 // Create the order as pending
                 $order = Order::create([
                     'cashier_id' => auth()->id(),
@@ -378,19 +391,21 @@ class CashierOrder extends Page implements HasForms
                 }
             });
 
-            $this->dispatch('notify', [
-                'type' => 'success',
-                'message' => "Order #{$order->order_number} saved as draft!",
-            ]);
+            Notification::make()
+                ->title('Draft Saved Successfully!')
+                ->body("Order #{$order->order_number} has been saved as draft")
+                ->success()
+                ->send();
 
             // Reset the order
             $this->resetOrder();
 
         } catch (\Exception $e) {
-            $this->dispatch('notify', [
-                'type' => 'error',
-                'message' => 'Failed to save draft. Please try again.',
-            ]);
+            Notification::make()
+                ->title('Draft Save Failed')
+                ->body('Failed to save draft. Please try again.')
+                ->danger()
+                ->send();
         }
     }
 
@@ -424,6 +439,10 @@ class CashierOrder extends Page implements HasForms
         $this->customerEmail = '';
         $this->customerPhone = '';
         $this->notes = '';
+        $this->searchTerm = '';
+        $this->selectedCategory = '';
+        $this->customerSectionCollapsed = true;
         $this->updateTotals();
+        $this->loadProducts(); // Reload products to show all available products
     }
 }
