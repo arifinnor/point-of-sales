@@ -13,11 +13,33 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        // Seed roles and permissions using Spatie
+        $this->call([
+            RoleAndPermissionSeeder::class,
         ]);
+
+        // Create test users
+        User::factory(10)->create();
+
+        $testUser = User::updateOrCreate(
+            ['email' => 'test@example.com'],
+            [
+                'name' => 'Test User',
+                'password' => bcrypt('password'),
+            ]
+        );
+
+        // Create admin user for testing
+        $adminUser = User::updateOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name' => 'Admin User',
+                'password' => bcrypt('password'),
+            ]
+        );
+
+        // Assign roles to test users using Spatie methods
+        $testUser->assignRole('cashier');
+        $adminUser->assignRole('admin');
     }
 }
