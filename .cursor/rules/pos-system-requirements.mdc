@@ -1,0 +1,224 @@
+---
+alwaysApply: true
+---
+<pos-system-requirements>
+
+# POS System MDC (Minimum Decision Constraints)
+
+> **Purpose:** Guide AI/code assistants to implement a reliable POS. When in doubt, **ask before assuming**. Do not add entities/fields not listed here without approval.
+
+## 1) Scope & Non-Functional Requirements
+- **MVP Scope:** Products, Product Categories, Variants, Inventory, Sales, Payments, Receipts/Printing, Cashier Shifts, Daily Reports.
+- **Excluded (MVP):** Loyalty, marketplace sync, multi-currency, advanced promotions engine.
+- **Performance Targets:** Read TTFB ≤ 300 ms; sale commit ≤ 800 ms at 200 rps burst; p95 ≤ 1.2 s.
+- **Consistency:** All sale flows are **ACID**; inventory updates use **row-level locks**.
+- **Reliability:** Idempotent state-changing APIs; safe retries; audit trail on all writes.
+
+## 2) Global Settings & Conventions
+- **Timezone:** `Asia/Jakarta`
+- **Currency:** `IDR` (store as `decimal(18,2)`; usually display without decimals).
+- **Tax Model:** Prices are **tax-inclusive** by default (`price_includes_tax=true`).
+- **Rounding:**  
+  - Non-cash: **bankers rounding** to 0.01.  
+  - Cash: round to nearest **Rp100** (configurable `cash_rounding=100`).
+- **Negative Stock:** Forbidden by default (`allow_negative_stock=false`).
+- **Identifiers:**  
+  - Receipt No: `OUTLET/REG-YYYYMMDD-####` (daily reset per register, zero-pad 4).  
+  - External references must be opaque IDs (UUID/KSUID).
+- **Audit:** No hard deletes for business entities; capture `old→new`, actor, reason, timestamp.
+
+## 3) Domain Model (Minimum, Required Fields Only)
+> Do **not** add columns/tables without approval.
+
+- **product_categories**:  
+  - `id (uuid)`  
+  - `parent_id (nullable, fk → product_categories.id)`  
+  - `name`  
+  - `code (unique, optional)`  
+  - `status (active|archived)`  
+
+- **products**:  
+  - `id (uuid)`  
+  - `sku (unique)`  
+  - `name`  
+  - `category_id (nullable, fk → product_categories.id)`  
+  - `tax_rate (decimal 5,2)`  
+  - `price_incl (decimal 18,2)`  
+  - `status (active|archived)`  
+
+- **product_variants**:  
+  - `id`  
+  - `product_id`  
+  - `code (unique)`  
+  - `name`  
+  - `barcode (unique, nullable)`  
+  - `price_override_incl (nullable)`  
+
+- **inventory**:  
+  - `id`  
+  - `variant_id`  
+  - `outlet_id`  
+  - `on_hand (int)`  
+  - `safety_stock (int)`  
+
+- **outlets**:  
+  - `id`  
+  - `code (unique)`  
+  - `name`  
+  - `address (nullable)`  
+
+- **registers**:  
+  - `id`  
+  - `outlet_id`  
+  - `name`  
+  - `printer_profile_id (nullable)`  
+
+- **shifts**:  
+  - `id`  
+  - `register_id`  
+  - `opened_by`  
+  - `opened_at`  
+  - `opening_float (money)`  
+  - `closed_by (nullable)`  
+  - `closed_at (nullable)`  
+  - `expected_cash (money)`  
+  - `actual_cash (money)`  
+  - `status (open|closed)`  
+
+- **sales**:  
+  - `id`  
+  - `outlet_id`  
+  - `register_id`  
+  - `shift_id`  
+  - `receipt_no`  
+  - `customer_id (nullable)`  
+  - `subtotal_excl`  
+  - `tax_amount`  
+  - `discount_amount`  
+  - `total_due`  
+  - `paid_total`  
+  - `change_due`  
+  - `status (completed|refunded|void)`  
+  - `channel (pos|web)`  
+
+- **sale_items**:  
+  - `id`  
+  - `sale_id`  
+  - `variant_id`  
+  - `qty`  
+  - `unit_price_incl`  
+  - `discount`  
+  - `tax_rate`  
+  - `line_excl`  
+  - `line_tax`  
+  - `line_incl`  
+
+- **payments**:  
+  - `id`  
+  - `sale_id`  
+  - `method (cash|card|ewallet|transfer)`  
+  - `amount`  
+  - `reference (nullable)`  
+
+- **stock_moves**:  
+  - `id`  
+  - `variant_id`  
+  - `outlet_id`  
+  - `qty`  
+  - `reason (sale|return|adjustment|receive)`  
+  - `ref_type`  
+  - `ref_id`  
+  - `moved_at`  
+
+- **returns**:  
+  - `id`  
+  - `sale_id`  
+  - `policy (full|partial)`  
+  - `reason`  
+  - `total_refund`  
+  - `method`  
+
+- **users/roles/permissions**: standard RBAC  
+
+## 4) RBAC (Minimum)
+- **Cashier:** create sale, read product/inventory, open/close shift, create return ≤ Rp1.000.000.  
+- **Supervisor:** all Cashier + approve discounts, stock adjustments ≤ ±5.  
+- **Admin:** full access.  
+- All write ops require authentication and are audited. Web UIs enforce CSRF.  
+
+## 5) Critical Business Rules (Must Enforce)
+1. **Shift must be open** before `sales.create`; else `403 SHIFT_NOT_OPEN`.  
+2. **Inventory decrement** happens **per item** on sale commit within a DB transaction; lock `inventory` rows (`SELECT … FOR UPDATE`).  
+3. **Discounts** computed **per line** first; order-level discounts applied after.  
+4. **Tax (tax-inclusive):**  
+- line_incl = round(qty * unit_price_incl)
+- line_excl = round(line_incl / (1 + tax_rate))
+- line_tax = line_incl - line_excl
+5. **Split payments** allowed; `sum(payments.amount) ≥ total_due`. **Change** only for **cash**.  
+6. **Refunds** create compensating `stock_moves` for returned items only.  
+7. **Void** never reuses receipt numbers; reverses stock effects, keeps audit.  
+8. **Barcode lookup priority:** `product_variants.barcode` → `products.sku` → `product_variants.code`.  
+9. **Imports** must be idempotent by `sku`/`barcode`; duplicates rejected with precise errors.  
+
+## 6) Events & Integrations
+- Emit domain events: `sale.created`, `sale.voided`, `sale.refunded`, `stock.changed`, `shift.opened`, `shift.closed`.  
+- Payload = entity snapshot with IDs and totals.  
+- Webhooks are **retryable** (exponential backoff) and **idempotent** (idempotency key).  
+
+## 7) Printing & Receipts
+- **Template:** HTML/Markdown → ESC/POS/PDF via adapters.  
+- **Required fields:** outlet, register, receipt_no, cashier, datetime, items (qty×name), subtotal, discounts, tax, total, payments, change, footer (return policy).  
+- **Paper:** 58 mm & 80 mm; long text **must wrap**; no truncation of item names.  
+
+## 8) Offline Mode (If Enabled)
+- Queue transactions locally (e.g., IndexedDB or local store) and sync later.  
+- Temporary receipt: `TEMP-<device>-<timestamp>` → remapped upon sync.  
+- Conflicts resolved server-side; devices accept corrections.  
+
+## 9) Security & Privacy
+- **Never** commit secrets; load from environment.  
+- Do not log PII or card PAN; store only gateway tokens/refs.  
+- Apply **rate limits** to write endpoints; enforce `Idempotency-Key`.  
+- Destructive schema changes require explicit human approval.  
+
+## 10) Testing Matrix (Must Pass)
+- Sales: single/multi-item, line & order discounts, split payments, cash rounding.  
+- Shifts: open → sale → close; cash mismatch handling.  
+- Stock: forbid < 0 when `allow_negative_stock=false`; refunds return stock.  
+- Concurrency: two cashiers selling the same variant do not oversell (verified with locks).  
+- Printing: 20+ items on 58 mm/80 mm render correctly (wrap/align).  
+- Daily Report = sum(`sale_items`) + sum(`payments`) with tax math consistent.  
+
+## 11) Edge Cases
+- Variant `price_override_incl` vs product `price_incl`.  
+- Discount greater than price → floor to 0 line total.  
+- Partial returns for sales with split payments.  
+- 0% tax items mixed with taxed items.  
+- Duplicate SKUs/barcodes on import.  
+- Stale open shift (not closed overnight).  
+- Duplicate offline uploads (dedupe by idempotency key).  
+
+## 12) Acceptance Criteria (Gherkin Samples)
+```gherkin
+Feature: Cash payment rounding
+Scenario: Rounding to nearest Rp100 for cash
+ Given a product "Teh Botol" priced at 3,250 with tax_rate 11%
+ When quantity is 1 and payment method is "cash"
+ Then total_due equals Rp3,300
+ And change_due is correct for the cash received
+
+Feature: Prevent negative stock
+  Scenario: Block sale when stock insufficient
+    Given variant "vr-1" has on_hand 0
+    When a sale attempts qty 1
+    Then the request is rejected with code "INSUFFICIENT_STOCK" ```
+
+## 13) Cursor Guardrails (Pin These)
+- Follow this MDC strictly; do not expand schema without approval.
+- Wrap sale + stock operations in a single DB transaction with row locks.
+- Enforce business rules above; write tests for every rule touched.
+- Require Idempotency-Key for all state-changing HTTP calls.
+- Use decimal for money; internal math may use integer cents for precision.
+- Ask clarifying questions if any ambiguity remains.
+
+</pos-system-requirements> ```
