@@ -4,18 +4,34 @@ import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as usersIndex } from '@/routes/users';
 import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid } from 'lucide-vue-next';
+import { Link, usePage } from '@inertiajs/vue3';
+import { BookOpen, Folder, LayoutGrid, Users } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
-const mainNavItems: NavItem[] = [
+const page = usePage();
+
+const baseNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
     },
 ];
+
+const conditionalNavItems: NavItem[] = [];
+
+// Add Users navigation item if user has permission
+if (page.props.auth.user?.permissions?.includes('view_user')) {
+    conditionalNavItems.push({
+        title: 'Users',
+        href: usersIndex.url(),
+        icon: Users,
+    });
+}
+
+const mainNavItems: NavItem[] = [...baseNavItems, ...conditionalNavItems];
 
 const footerNavItems: NavItem[] = [
     {
