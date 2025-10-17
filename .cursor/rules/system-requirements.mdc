@@ -1,7 +1,7 @@
 ---
 alwaysApply: true
 ---
-<pos-system-requirements>
+<system-requirements>
 
 # POS System MDC (Minimum Decision Constraints)
 
@@ -13,6 +13,8 @@ alwaysApply: true
 - **Performance Targets:** Read TTFB ≤ 300 ms; sale commit ≤ 800 ms at 200 rps burst; p95 ≤ 1.2 s.
 - **Consistency:** All sale flows are **ACID**; inventory updates use **row-level locks**.
 - **Reliability:** Idempotent state-changing APIs; safe retries; audit trail on all writes.
+ - **Multi-tenancy:** Row-scoped tenancy with strict data isolation. All reads/writes, caches, queues, webhooks, and logs must be tenant-aware. Superadmin may manage multiple tenants but must explicitly assume a tenant context for data operations.
+ - **Vertical modes:** Configurable per tenant and per outlet. Support `restaurant` and `minimarket` modes in addition to default `pos`, toggling UI and workflow features without schema changes.
 
 ## 2) Global Settings & Conventions
 - **Timezone:** `Asia/Jakarta`
@@ -145,6 +147,7 @@ alwaysApply: true
 - **Supervisor:** all Cashier + approve discounts, stock adjustments ≤ ±5.  
 - **Admin:** full access.  
 - All write ops require authentication and are audited. Web UIs enforce CSRF.  
+ - Roles and permissions are tenant-scoped. A system-level `SuperAdmin` can operate across tenants but must select a tenant context before performing tenant-bound actions.
 
 ## 5) Critical Business Rules (Must Enforce)
 1. **Shift must be open** before `sales.create`; else `403 SHIFT_NOT_OPEN`.  
@@ -180,6 +183,8 @@ alwaysApply: true
 - Do not log PII or card PAN; store only gateway tokens/refs.  
 - Apply **rate limits** to write endpoints; enforce `Idempotency-Key`.  
 - Destructive schema changes require explicit human approval.  
+ - Enforce strict tenant isolation at application and database layers; every query must include tenant scope. Background jobs, cache keys, storage paths, and websocket channels must be namespaced by tenant.  
+ - Namespacing: receipt numbering and `Idempotency-Key` must be unique per tenant (and per register where applicable).
 
 ## 10) Testing Matrix (Must Pass)
 - Sales: single/multi-item, line & order discounts, split payments, cash rounding.  
@@ -188,6 +193,9 @@ alwaysApply: true
 - Concurrency: two cashiers selling the same variant do not oversell (verified with locks).  
 - Printing: 20+ items on 58 mm/80 mm render correctly (wrap/align).  
 - Daily Report = sum(`sale_items`) + sum(`payments`) with tax math consistent.  
+ - Tenancy: no cross-tenant access; per-tenant uniqueness constraints; tenant-scoped caches/events; superadmin context switching verified.  
+ - Restaurant mode: open tabs per table, split/merge bills, partial payments per guest, service charge/tip math, KDS/kitchen ticket routing.  
+ - Minimarket mode: barcode scanning performance, weighted/price-embedded barcode parsing, supervisor-gated price overrides, receipt-based returns workflow.
 
 ## 11) Edge Cases
 - Variant `price_override_incl` vs product `price_incl`.  
@@ -197,6 +205,10 @@ alwaysApply: true
 - Duplicate SKUs/barcodes on import.  
 - Stale open shift (not closed overnight).  
 - Duplicate offline uploads (dedupe by idempotency key).  
+ - Restaurant: split/merge bills; per-guest partial payments; course firing vs print timing; voids after kitchen fire.  
+ - Minimarket: weighted barcode prefixes colliding with real SKUs; open-price items; override limits and approvals.  
+ - Rounding interactions with service charges and tips; ensure totals remain consistent.  
+ - Tenancy: same SKU/barcode allowed across tenants; uniqueness enforced within tenant only; ensure exports/imports remain tenant-scoped.
 
 ## 12) Acceptance Criteria (Gherkin Samples)
 ```gherkin
@@ -213,6 +225,62 @@ Feature: Prevent negative stock
     When a sale attempts qty 1
     Then the request is rejected with code "INSUFFICIENT_STOCK" ```
 
+```gherkin
+Feature: Multi-tenant data isolation
+  Scenario: Same SKU across two tenants does not collide
+    Given tenant "toko-a" has product with sku "ABC-123"
+    And tenant "toko-b" has product with sku "ABC-123"
+    When a user from tenant "toko-a" searches for "ABC-123"
+    Then only the product from tenant "toko-a" is visible
+
+Feature: Restaurant split bill with partial payments
+  Scenario: Split one table bill into two and pay separately
+    Given a table has items A, B, C, D in one open tab
+    When the cashier splits items A,B to Bill 1 and C,D to Bill 2
+    And Bill 1 is paid by card and Bill 2 is paid by cash
+    Then inventory decrements per item on each commit within a transaction
+    And receipts print correctly per bill with service charge and tips applied
+
+Feature: Minimarket weighted barcode parsing
+  Scenario: Parse price-embedded EAN and compute totals
+    Given an item uses weighted barcode format with price embedded
+    When the barcode is scanned
+    Then the unit price and quantity are derived from the barcode
+    And the line total equals the parsed price with tax math consistent
+
+Feature: Supervisor-gated price override
+  Scenario: Cashier requests price override over threshold
+    Given a cashier scans an item and enters an override exceeding policy
+    When a supervisor approves the override
+    Then the sale proceeds and the audit trail captures actor, reason, and timestamp
+```
+
+## 14) Multi-Tenancy (Row-Scoped)
+- **Model:** Default to row-scoped multi-tenancy with strict isolation. All tenant-bound entities MUST be queried and written within an active tenant context.  
+- **Context:** Tenant derived from domain/subdomain, user membership, or explicit header. Middleware must enforce tenant presence and prevent cross-tenant leakage.  
+- **Indexes & Uniqueness:** Business-meaningful uniqueness (e.g., `sku`, `barcode`, `receipt_no`) is enforced per tenant (and per register for receipts).  
+- **Namespacing:** Caches, queues, websocket channels, storage paths, and idempotency keys are namespaced by tenant.  
+- **RBAC:** Roles/permissions are tenant-scoped. A `SuperAdmin` may access multiple tenants but must assume a tenant before data actions.  
+- **Auditing:** Audit entries include tenant, actor, old→new, reason, timestamp. Events and webhooks include tenant in payloads for idempotency and routing.  
+- **Schema Note:** Implementations commonly add a `tenant` identifier to business entities and composite unique indexes. Any schema changes require explicit approval per this MDC.
+
+## 15) Vertical Modes
+- **Configuration:** `mode` is configurable per tenant and optionally per outlet. Supported: `restaurant`, `minimarket`, default `pos`. Feature flags drive UI/flow; schema remains unchanged unless approved.  
+
+- **Restaurant Mode Requirements:**  
+  - Table service: open/transfer/merge/split tabs; seat-level optional.  
+  - Coursing and fire/hold; kitchen tickets routed by category/station; KDS optional.  
+  - Modifiers/add-ons with price deltas; comp/void with reason and RBAC.  
+  - Service charge (percent or fixed) and tips; included in totals with correct rounding.  
+  - Partial payments per guest; print separate receipts; inventory decremented on commit.  
+
+- **Minimarket Mode Requirements:**  
+  - High-throughput scanning; quick tender keys.  
+  - Weighted/price-embedded barcode parsing (e.g., EAN patterns); open-price items with supervisor approval.  
+  - Supervisor-gated price overrides over thresholds; receipt-based returns.  
+  - Label/receipt printing suitable for 58mm/80mm; cash drawer operations (pay in/out).  
+  - Basic per-line discounts only; advanced promotions remain out-of-scope for MVP.
+
 ## 13) Cursor Guardrails (Pin These)
 - Follow this MDC strictly; do not expand schema without approval.
 - Wrap sale + stock operations in a single DB transaction with row locks.
@@ -221,4 +289,4 @@ Feature: Prevent negative stock
 - Use decimal for money; internal math may use integer cents for precision.
 - Ask clarifying questions if any ambiguity remains.
 
-</pos-system-requirements> ```
+</system-requirements> ```

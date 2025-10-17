@@ -1,0 +1,35 @@
+---
+alwaysApply: true
+---
+<shadcn-vue-components>
+
+# shadcn-vue Component Guidelines
+
+## Component Preference Rules
+- **Always prefer shadcn-vue components** over custom implementations or other UI libraries.
+- **Check existing shadcn-vue components first** before creating new UI elements.
+- **Use the shadcn-vue CLI** to add new components when needed: `npx shadcn-vue@latest add <component-name>`.
+
+## Available Components
+The project has the following shadcn-vue components available in `@/components/ui/`:
+- Avatar, Badge, Breadcrumb, Button, Card, Checkbox, Collapsible
+- Dialog, Dropdown Menu, Input, Label, Navigation Menu, Pin Input
+- Select, Separator, Sheet, Sidebar, Skeleton, Switch, Tooltip
+
+## Component Usage Guidelines
+- **Import from `@/components/ui`** - Use the established import pattern.
+- **Follow shadcn-vue patterns** - Use the component composition patterns as designed.
+- **Extend with variants** - Use `class-variance-authority` for component variants when needed.
+- **Maintain consistency** - All UI components should follow the same design system.
+
+## When to Add New Components
+- **Before creating custom UI** - Always check if a shadcn-vue component exists.
+- **Use shadcn-vue CLI** - Add new components using the official CLI tool.
+- **Follow naming conventions** - Use the established component naming patterns.
+
+## Component Customization
+- **Use CSS variables** - Leverage the CSS variable system for theming.
+- **Extend with Tailwind** - Use Tailwind classes for additional styling.
+- **Maintain accessibility** - shadcn-vue components include accessibility features by default.
+
+</shadcn-vue-components>
