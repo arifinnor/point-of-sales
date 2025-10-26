@@ -15,6 +15,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Label } from '@/components/ui/label';
 import { 
     Card, 
     CardContent, 
@@ -42,7 +43,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
     {
         title: props.user.name,
-        href: show.url(props.user.id),
+        href: show.url(String(props.user.id)),
     },
 ];
 
@@ -120,7 +121,7 @@ const formatPermissionName = (permission: string) => {
                         </div>
                     </div>
                 </div>
-                <Link :href="edit.url(user.id)">
+                <Link :href="edit.url(String(user.id))">
                     <Button>
                         <Edit class="mr-2 h-4 w-4" />
                         Edit User
@@ -279,7 +280,7 @@ const formatPermissionName = (permission: string) => {
                             <CardTitle>Quick Actions</CardTitle>
                         </CardHeader>
                         <CardContent class="space-y-2">
-                            <Link :href="edit.url(user.id)" class="block">
+                            <Link :href="edit.url(String(user.id))" class="block">
                                 <Button variant="outline" class="w-full justify-start">
                                     <Edit class="mr-2 h-4 w-4" />
                                     Edit User

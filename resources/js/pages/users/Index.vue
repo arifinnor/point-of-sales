@@ -120,7 +120,7 @@ const confirmDelete = (user: User) => {
 
 const deleteUser = () => {
     if (userToDelete.value) {
-        router.delete(destroy.url(userToDelete.value.id), {
+        router.delete(destroy.url(String(userToDelete.value.id)), {
             onSuccess: () => {
                 showDeleteDialog.value = false;
                 userToDelete.value = null;
@@ -210,7 +210,6 @@ const formatDate = (dateString: string) => {
                                     <SelectValue placeholder="All roles" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">All roles</SelectItem>
                                     <SelectItem v-for="role in roles" :key="role.id" :value="role.name">
                                         {{ role.name.charAt(0).toUpperCase() + role.name.slice(1) }}
                                     </SelectItem>
@@ -312,7 +311,7 @@ const formatDate = (dateString: string) => {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuItem as-child>
-                                                        <Link :href="show.url(user.id)">
+                                                        <Link :href="show.url(String(user.id))">
                                                             <Eye class="mr-2 h-4 w-4" />
                                                             View
                                                         </Link>
@@ -321,7 +320,7 @@ const formatDate = (dateString: string) => {
                                                         v-if="canManageUsers"
                                                         as-child
                                                     >
-                                                        <Link :href="edit.url(user.id)">
+                                                        <Link :href="edit.url(String(user.id))">
                                                             <Edit class="mr-2 h-4 w-4" />
                                                             Edit
                                                         </Link>
