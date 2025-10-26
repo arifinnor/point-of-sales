@@ -12,10 +12,18 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Seed roles and permissions using Spatie
+        // Seed in order: Tenants first, then roles/permissions, then users
         $this->call([
+            TenantSeeder::class,
             RoleAndPermissionSeeder::class,
             UserSeeder::class,
         ]);
+
+        $this->command->info('✅ Database seeding completed successfully!');
+        $this->command->info('Super Admin: superadmin@example.com');
+        $this->command->info('Admin: admin@example.com');
+        $this->command->info('Supervisor: supervisor@example.com');
+        $this->command->info('Cashier: cashier@example.com');
+        $this->command->info('Default password for all users: password');
     }
 }

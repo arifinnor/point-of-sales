@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -25,7 +24,7 @@ class RoleAndPermissionSeeder extends Seeder
             'view_sale' => 'View sales transactions',
 
             // Return permissions
-            'create_return' => 'Create returns (with amount constraints: ' . config('pos.currency.symbol', 'Rp') . number_format(config('pos.constraints.cashier.max_return_amount', 1000000)) . ')',
+            'create_return' => 'Create returns (with amount constraints: '.config('pos.currency.symbol', 'Rp').number_format(config('pos.constraints.cashier.max_return_amount', 1000000)).')',
             'create_unlimited_return' => 'Create returns without amount constraints',
 
             // Product permissions
@@ -34,7 +33,7 @@ class RoleAndPermissionSeeder extends Seeder
 
             // Inventory permissions
             'view_inventory' => 'View inventory levels',
-            'adjust_stock' => 'Adjust stock levels (with quantity constraints: ±' . config('pos.constraints.supervisor.max_stock_adjustment', 5) . ')',
+            'adjust_stock' => 'Adjust stock levels (with quantity constraints: ±'.config('pos.constraints.supervisor.max_stock_adjustment', 5).')',
             'unlimited_stock_adjustment' => 'Adjust stock levels without constraints',
 
             // Shift permissions
@@ -75,16 +74,31 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         // Create roles and assign permissions
+        $this->createSuperAdminRole();
         $this->createCashierRole();
         $this->createSupervisorRole();
         $this->createAdminRole();
+    }
+
+    private function createSuperAdminRole(): void
+    {
+        // Super Admin role for cross-tenant access
+        $superAdmin = Role::updateOrCreate(
+            ['name' => 'super-admin'],
+            ['guard_name' => 'web']
+        );
+
+        // Super Admin has all permissions across all tenants
+        $superAdmin->givePermissionTo(Permission::all());
+
+        $this->command->info('Created super-admin role with all permissions.');
     }
 
     private function createCashierRole(): void
     {
         $maxReturnAmount = config('pos.constraints.cashier.max_return_amount', 1000000);
         $currencySymbol = config('pos.currency.symbol', 'Rp');
-        
+
         $cashier = Role::updateOrCreate(
             ['name' => 'cashier'],
             ['guard_name' => 'web']
@@ -108,7 +122,7 @@ class RoleAndPermissionSeeder extends Seeder
     private function createSupervisorRole(): void
     {
         $maxStockAdjustment = config('pos.constraints.supervisor.max_stock_adjustment', 5);
-        
+
         $supervisor = Role::updateOrCreate(
             ['name' => 'supervisor'],
             ['guard_name' => 'web']
