@@ -19,11 +19,7 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
         ]);
 
+        $this->command->newLine();
         $this->command->info('✅ Database seeding completed successfully!');
-        $this->command->info('Super Admin: superadmin@example.com');
-        $this->command->info('Admin: admin@example.com');
-        $this->command->info('Supervisor: supervisor@example.com');
-        $this->command->info('Cashier: cashier@example.com');
-        $this->command->info('Default password for all users: password');
     }
 }

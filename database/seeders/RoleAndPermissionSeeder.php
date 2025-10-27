@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Tenant;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -16,7 +17,16 @@ class RoleAndPermissionSeeder extends Seeder
         // Reset cached roles and permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // Create permissions
+        // Get all tenants
+        $tenants = Tenant::all();
+
+        if ($tenants->isEmpty()) {
+            $this->command->error('No tenants found. Please run TenantSeeder first.');
+
+            return;
+        }
+
+        // Create permissions globally (permissions are shared across tenants)
         $permissions = [
             // Sales permissions
             'create_sale' => 'Create new sales transactions',
@@ -73,11 +83,21 @@ class RoleAndPermissionSeeder extends Seeder
             );
         }
 
-        // Create roles and assign permissions
+        // Create super-admin role globally (cross-tenant)
         $this->createSuperAdminRole();
-        $this->createCashierRole();
-        $this->createSupervisorRole();
-        $this->createAdminRole();
+
+        // Create roles for each tenant
+        foreach ($tenants as $tenant) {
+            setPermissionsTeamId($tenant->id);
+
+            $this->command->info("Creating roles for tenant: {$tenant->name} (ID: {$tenant->id})");
+
+            $this->createCashierRole();
+            $this->createSupervisorRole();
+            $this->createAdminRole();
+        }
+
+        $this->command->info('✅ Roles and permissions created successfully for all tenants.');
     }
 
     private function createSuperAdminRole(): void

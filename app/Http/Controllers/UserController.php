@@ -18,7 +18,19 @@ class UserController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = User::query()->with('roles');
+        $currentUser = auth()->user();
+        $currentTenant = $currentUser->currentTenant();
+
+        // Query base: if super admin, show all users; otherwise, filter by current tenant
+        if ($currentUser->canAccessAllTenants()) {
+            $query = User::query()->with('tenants');
+        } else {
+            // Regular users only see users from their current tenant
+            $query = User::query()
+                ->whereHas('tenants', function ($q) use ($currentTenant) {
+                    $q->where('tenants.id', $currentTenant->id);
+                });
+        }
 
         // Search functionality
         if ($request->filled('search')) {
@@ -40,6 +52,28 @@ class UserController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        // Load roles for each user in their proper tenant context
+        $users->getCollection()->transform(function ($user) {
+            // Get the user's default tenant for role context
+            $userTenant = $user->tenants()->wherePivot('is_default', true)->first()
+                ?? $user->tenants()->first();
+
+            if ($userTenant) {
+                // Temporarily switch to user's tenant context to load roles
+                $originalTeamId = getPermissionsTeamId();
+                setPermissionsTeamId($userTenant->id);
+
+                // Reload roles in the correct tenant context
+                $user->load('roles');
+
+                // Restore original tenant context
+                setPermissionsTeamId($originalTeamId);
+            }
+
+            return $user;
+        });
+
+        // Get roles for the current tenant context
         $roles = Role::all(['id', 'name']);
 
         return Inertia::render('users/Index', [
@@ -67,6 +101,8 @@ class UserController extends Controller
     public function store(StoreUserRequest $request): RedirectResponse
     {
         $validated = $request->validated();
+        $currentUser = auth()->user();
+        $currentTenant = $currentUser->currentTenant();
 
         $user = User::create([
             'name' => $validated['name'],
@@ -74,6 +110,12 @@ class UserController extends Controller
             'password' => $validated['password'],
         ]);
 
+        // Attach user to current tenant
+        if ($currentTenant) {
+            $user->tenants()->attach($currentTenant->id, ['is_default' => true]);
+        }
+
+        // Assign roles in the current tenant context
         if (isset($validated['roles'])) {
             $user->assignRole($validated['roles']);
         }
@@ -87,7 +129,18 @@ class UserController extends Controller
      */
     public function show(User $user): Response
     {
-        $user->load('roles.permissions');
+        // Load roles in the user's tenant context
+        $userTenant = $user->tenants()->wherePivot('is_default', true)->first()
+            ?? $user->tenants()->first();
+
+        if ($userTenant) {
+            $originalTeamId = getPermissionsTeamId();
+            setPermissionsTeamId($userTenant->id);
+
+            $user->load('roles.permissions');
+
+            setPermissionsTeamId($originalTeamId);
+        }
 
         return Inertia::render('users/Show', [
             'user' => $user,
@@ -99,8 +152,23 @@ class UserController extends Controller
      */
     public function edit(User $user): Response
     {
-        $user->load('roles');
-        $roles = Role::all(['id', 'name']);
+        // Load roles in the user's tenant context
+        $userTenant = $user->tenants()->wherePivot('is_default', true)->first()
+            ?? $user->tenants()->first();
+
+        if ($userTenant) {
+            $originalTeamId = getPermissionsTeamId();
+            setPermissionsTeamId($userTenant->id);
+
+            $user->load('roles');
+
+            // Get roles for the user's tenant context
+            $roles = Role::all(['id', 'name']);
+
+            setPermissionsTeamId($originalTeamId);
+        } else {
+            $roles = collect();
+        }
 
         return Inertia::render('users/Edit', [
             'user' => $user,
@@ -125,8 +193,19 @@ class UserController extends Controller
             $user->update(['password' => $validated['password']]);
         }
 
+        // Sync roles in the user's tenant context
         if (isset($validated['roles'])) {
-            $user->syncRoles($validated['roles']);
+            $userTenant = $user->tenants()->wherePivot('is_default', true)->first()
+                ?? $user->tenants()->first();
+
+            if ($userTenant) {
+                $originalTeamId = getPermissionsTeamId();
+                setPermissionsTeamId($userTenant->id);
+
+                $user->syncRoles($validated['roles']);
+
+                setPermissionsTeamId($originalTeamId);
+            }
         }
 
         return redirect()->route('users.index')

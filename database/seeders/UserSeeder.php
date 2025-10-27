@@ -15,13 +15,14 @@ class UserSeeder extends Seeder
     {
         // Get all tenants
         $tenants = Tenant::all();
-        $firstTenant = $tenants->first();
 
-        if (! $firstTenant) {
+        if ($tenants->isEmpty()) {
             $this->command->error('No tenants found. Please run TenantSeeder first.');
 
             return;
         }
+
+        $firstTenant = $tenants->first();
 
         // Set tenant context for Spatie Permission
         setPermissionsTeamId($firstTenant->id);
@@ -32,48 +33,79 @@ class UserSeeder extends Seeder
             'email' => 'superadmin@example.com',
         ]);
         $superAdmin->assignRole('super-admin');
+
         // Attach super admin to all tenants
         foreach ($tenants as $tenant) {
             $superAdmin->tenants()->attach($tenant->id, ['is_default' => $tenant->id === $firstTenant->id]);
         }
 
-        // Create admin user for first tenant
-        $adminUser = User::factory()->create([
-            'name' => 'Admin User',
-            'email' => 'admin@example.com',
-        ]);
-        $adminUser->assignRole('admin');
-        $adminUser->tenants()->attach($firstTenant->id, ['is_default' => true]);
+        $this->command->info("Created Super Admin with access to all {$tenants->count()} tenants.");
 
-        // Create supervisor user for first tenant
-        $supervisorUser = User::factory()->create([
-            'name' => 'Supervisor User',
-            'email' => 'supervisor@example.com',
-        ]);
-        $supervisorUser->assignRole('supervisor');
-        $supervisorUser->tenants()->attach($firstTenant->id, ['is_default' => true]);
+        // Create standard users (admin, supervisor, cashier) for each tenant
+        foreach ($tenants as $index => $tenant) {
+            setPermissionsTeamId($tenant->id);
 
-        // Create cashier user for first tenant
-        $cashierUser = User::factory()->create([
-            'name' => 'Cashier User',
-            'email' => 'cashier@example.com',
-        ]);
-        $cashierUser->assignRole('cashier');
-        $cashierUser->tenants()->attach($firstTenant->id, ['is_default' => true]);
+            $tenantNumber = $index + 1;
+            $tenantSlug = $this->getTenantSlug($tenant->name, $tenantNumber);
 
-        // Create users for second tenant if exists
-        if ($tenants->count() > 1) {
-            $secondTenant = $tenants->get(1);
-            setPermissionsTeamId($secondTenant->id);
+            $this->command->info("Creating users for tenant: {$tenant->name}");
 
-            $tenant2Admin = User::factory()->create([
-                'name' => 'Tenant 2 Admin',
-                'email' => 'admin.tenant2@example.com',
+            // Create admin for this tenant
+            $admin = User::factory()->create([
+                'name' => "Admin {$tenant->name}",
+                'email' => "admin.{$tenantSlug}@example.com",
             ]);
-            $tenant2Admin->assignRole('admin');
-            $tenant2Admin->tenants()->attach($secondTenant->id, ['is_default' => true]);
+            $admin->assignRole('admin');
+            $admin->tenants()->attach($tenant->id, ['is_default' => true]);
+            $this->command->info("  ✓ Created admin: {$admin->email}");
+
+            // Create supervisor for this tenant
+            $supervisor = User::factory()->create([
+                'name' => "Supervisor {$tenant->name}",
+                'email' => "supervisor.{$tenantSlug}@example.com",
+            ]);
+            $supervisor->assignRole('supervisor');
+            $supervisor->tenants()->attach($tenant->id, ['is_default' => true]);
+            $this->command->info("  ✓ Created supervisor: {$supervisor->email}");
+
+            // Create cashier for this tenant
+            $cashier = User::factory()->create([
+                'name' => "Cashier {$tenant->name}",
+                'email' => "cashier.{$tenantSlug}@example.com",
+            ]);
+            $cashier->assignRole('cashier');
+            $cashier->tenants()->attach($tenant->id, ['is_default' => true]);
+            $this->command->info("  ✓ Created cashier: {$cashier->email}");
         }
 
-        $this->command->info('Created users and attached them to tenants.');
+        $this->command->info('✅ All users created successfully!');
+        $this->command->newLine();
+        $this->command->info('Login credentials (password: password):');
+        $this->command->info('  Super Admin: superadmin@example.com');
+
+        foreach ($tenants as $index => $tenant) {
+            $tenantNumber = $index + 1;
+            $tenantSlug = $this->getTenantSlug($tenant->name, $tenantNumber);
+            $this->command->info("  {$tenant->name}:");
+            $this->command->info("    - admin.{$tenantSlug}@example.com");
+            $this->command->info("    - supervisor.{$tenantSlug}@example.com");
+            $this->command->info("    - cashier.{$tenantSlug}@example.com");
+        }
+    }
+
+    /**
+     * Generate a slug from tenant name for email addresses.
+     */
+    private function getTenantSlug(string $tenantName, int $index): string
+    {
+        // Convert tenant name to a simple slug
+        $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '', $tenantName));
+
+        // If slug is empty or too generic, use tenant number
+        if (empty($slug) || strlen($slug) < 3) {
+            return "tenant{$index}";
+        }
+
+        return $slug;
     }
 }
