@@ -12,11 +12,12 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Seed in order: Tenants first, then roles/permissions, then users
+        // Seed in order: Tenants first, then roles/permissions, then users, then product catalog
         $this->call([
             TenantSeeder::class,
             RoleAndPermissionSeeder::class,
             UserSeeder::class,
+            ProductCatalogSeeder::class,
         ]);
 
         $this->command->newLine();
