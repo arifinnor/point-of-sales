@@ -2,6 +2,7 @@
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import TenantMenu from '@/components/TenantMenu.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -27,6 +28,14 @@ const props = withDefaults(defineProps<Props>(), {
 
 const page = usePage();
 const auth = computed(() => page.props.auth);
+const tenant = computed(() => page.props.tenant);
+
+// Debug logging
+console.log('AppHeader tenant data:', {
+    tenant: tenant.value,
+    current: tenant.value?.current,
+    available: tenant.value?.available
+});
 
 const isCurrentRoute = computed(() => (url: NonNullable<InertiaLinkProps['href']>) => urlIsActive(url, page.url));
 
@@ -109,6 +118,14 @@ const rightNavItems: NavItem[] = [
                     <AppLogo />
                 </Link>
 
+                <!-- Tenant Menu -->
+                <div v-if="tenant.current" class="ml-4">
+                    <TenantMenu 
+                        :current-tenant="tenant.current" 
+                        :available-tenants="tenant.available" 
+                    />
+                </div>
+
                 <!-- Desktop Menu -->
                 <div class="hidden h-full lg:flex lg:flex-1">
                     <NavigationMenu class="ml-10 flex h-full items-stretch">
@@ -131,6 +148,12 @@ const rightNavItems: NavItem[] = [
                 </div>
 
                 <div class="ml-auto flex items-center space-x-2">
+                    <!-- Tenant Menu -->
+                    <TenantMenu 
+                        :current-tenant="tenant.current" 
+                        :available-tenants="tenant.available" 
+                    />
+
                     <div class="relative flex items-center space-x-1">
                         <Button variant="ghost" size="icon" class="group h-9 w-9 cursor-pointer">
                             <Search class="size-5 opacity-80 group-hover:opacity-100" />

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import TenantMenu from '@/components/TenantMenu.vue';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItemType } from '@/types';
+import { usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 withDefaults(
     defineProps<{
@@ -11,6 +14,9 @@ withDefaults(
         breadcrumbs: () => [],
     },
 );
+
+const page = usePage();
+const tenant = computed(() => page.props.tenant);
 </script>
 
 <template>
@@ -22,6 +28,14 @@ withDefaults(
             <template v-if="breadcrumbs && breadcrumbs.length > 0">
                 <Breadcrumbs :breadcrumbs="breadcrumbs" />
             </template>
+        </div>
+        
+        <div class="ml-auto">
+            <!-- Tenant Menu -->
+            <TenantMenu 
+                :current-tenant="tenant.current" 
+                :available-tenants="tenant.available" 
+            />
         </div>
     </header>
 </template>

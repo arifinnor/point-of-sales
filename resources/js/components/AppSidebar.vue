@@ -5,9 +5,10 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { index as usersIndex } from '@/routes/users';
+import { index as outletsIndex } from '@/routes/outlets';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Users } from 'lucide-vue-next';
+import { BookOpen, Folder, LayoutGrid, Users, Store } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
 const page = usePage();
@@ -28,6 +29,15 @@ if (page.props.auth.user?.permissions?.includes('view_user')) {
         title: 'Users',
         href: usersIndex.url(),
         icon: Users,
+    });
+}
+
+// Add Outlets navigation item if user has permission
+if (page.props.auth.user?.permissions?.includes('view_outlet')) {
+    conditionalNavItems.push({
+        title: 'Outlets & Registers',
+        href: outletsIndex.url(),
+        icon: Store,
     });
 }
 

@@ -33,6 +33,12 @@ class TenantScope implements Scope
             return;
         }
 
+        // Skip tenant scope for superadmins
+        $user = auth()->user();
+        if ($user && $user->canAccessAllTenants()) {
+            return;
+        }
+
         // Apply the tenant_id filter
         $builder->where($model->qualifyColumn('tenant_id'), $tenant->id);
     }
